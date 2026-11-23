@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>遊戲實驗室</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1c1c1e; --muted:#6b6b70; --card:#fff; --line:#e3e3e6; --accent:#2f6fed; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151517; --fg:#ececee; --muted:#9a9aa1; --card:#1f1f22; --line:#33333a; --accent:#6c9cff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  main { max-width:880px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  h2 { margin:40px 0 12px; font-size:18px; }
+  .sub { color:var(--muted); margin:0; }
+  .notice { margin-top:20px; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--muted); font-size:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .card h3 { margin:0; font-size:18px; }
+  .meta { color:var(--muted); font-size:13px; }
+  .actions { display:flex; gap:8px; margin-top:auto; padding-top:8px; }
+  a.btn { padding:6px 14px; border-radius:8px; border:1px solid var(--accent); color:var(--accent); text-decoration:none; font-size:14px; }
+  a.btn.primary { background:var(--accent); color:#fff; }
+  .empty { color:var(--muted); }
+  ul.recent { padding-left:20px; margin:0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>遊戲實驗室</h1>
+  <p class="sub">用簡單的圖形測試各種玩法好不好玩。</p>
+  <div class="notice" id="notice">玩完後可以填一份約 2 分鐘的問卷，只需要暱稱，不收其他個資。想退出隨時可以。</div>
+
+  <h2>最近更新</h2>
+  <div id="recent" class="empty">載入中…</div>
+
+  <h2>所有遊戲</h2>
+  <div id="games" class="grid"></div>
+</main>
+<script>
+(async () => {
+  const recentEl = document.getElementById('recent');
+  const gamesEl = document.getElementById('games');
+  let data;
+  try {
+    const res = await fetch('games/games.json');
+    data = await res.json();
+  } catch (e) {
+    recentEl.textContent = '無法載入遊戲清單（若直接用檔案開啟，請改用網站網址）。';
+    return;
+  }
+  const games = data.games || [];
+  if (!games.length) {
+    recentEl.textContent = '還沒有遊戲，敬請期待。';
+    return;
+  }
+  const byDate = [...games].sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
+  recentEl.className = '';
+  recentEl.innerHTML = '<ul class="recent">' + byDate.slice(0, 5).map(g =>
+    `<li>${g.name} ${g.version}（${g.updated}）</li>`).join('') + '</ul>';
+  gamesEl.innerHTML = games.map(g => {
+    const feedback = data.feedbackFormUrl
+      ? `<a class="btn" href="${data.feedbackFormUrl}" target="_blank" rel="noopener">給回饋</a>` : '';
+    return `<div class="card">
+      <h3>${g.name}</h3>
+      <div class="meta">${g.version} · 更新於 ${g.updated}</div>
+      <div>${g.summary}</div>
+      <div class="actions"><a class="btn primary" href="games/${g.id}/${g.version}/index.html">開始玩</a>${feedback}</div>
+    </div>`;
+  }).join('');
+})();
+</script>
+</body>
+</html>
