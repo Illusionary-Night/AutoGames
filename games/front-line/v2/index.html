@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前線輪替</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1c1c1e; --muted:#6b6b70; --card:#fff; --line:#d9d9de; --front:#eef3ff;
+          --cav:#d93d42; --shield:#3e63dd; --bow:#218358; --foe:#8e4ec6; --good:#218358; --bad:#d93d42; --warn:#b25e00; --accent:#2f6fed; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#151517; --fg:#ececee; --muted:#9a9aa1; --card:#1f1f22; --line:#38383f; --front:#1d2538;
+            --cav:#ff6369; --shield:#7b9bff; --bow:#4cc38a; --foe:#bf8bf0; --good:#4cc38a; --bad:#ff6369; --warn:#ffa94d; --accent:#6c9cff; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:12px 16px 40px; }
+  header { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:6px; }
+  h1 { font-size:21px; margin:0; }
+  .stats { font-variant-numeric:tabular-nums; }
+  details { color:var(--muted); font-size:13px; margin:6px 0 8px; }
+  details ul { margin:6px 0; padding-left:18px; }
+  .board { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; }
+  .cell { min-height:52px; border:1px solid var(--line); border-radius:8px; background:var(--card);
+          display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; }
+  .cell.next { min-height:32px; border-style:dashed; background:transparent; font-size:13px; opacity:.75; }
+  .cell.danger { border-color:var(--warn); border-width:2px; }
+  button.cell { background:var(--front); min-height:84px; font:inherit; color:var(--fg); cursor:pointer; padding:2px; }
+  button.cell.target { border:2px solid var(--accent); }
+  button.cell.armed { border:2px solid var(--warn); }
+  .flash-shot { animation:shot .45s ease; }
+  @keyframes shot { 30% { background:var(--warn); } }
+  button.cell:disabled { cursor:default; }
+  .sm { font-size:13px; }
+  .u { font-size:18px; font-weight:700; line-height:1.2; font-variant-numeric:tabular-nums; }
+  .cav { color:var(--cav); } .shield { color:var(--shield); } .bow { color:var(--bow); } .foe { color:var(--foe); }
+  .sub { font-size:11px; color:var(--muted); line-height:1.25; }
+  .pred { font-size:12px; font-weight:600; line-height:1.25; text-align:center; }
+  .good { color:var(--good); } .bad { color:var(--bad); } .warn { color:var(--warn); }
+  .flash-kill { animation:kill .6s ease; } .flash-death, .flash-breach { animation:hurt .6s ease; }
+  @keyframes kill { 30% { background:var(--good); transform:scale(1.07); } }
+  @keyframes hurt { 15% { background:var(--bad); transform:translateX(-5px); } 35% { transform:translateX(5px); } 55% { transform:translateX(-3px); } }
+  .label { font-size:13px; color:var(--muted); margin:10px 0 4px; }
+  .reserve { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; }
+  .sol { border:2px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); font:inherit; padding:4px 2px; cursor:pointer; }
+  .sol.sel { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent) inset; }
+  .sol:disabled { cursor:default; }
+  .sol.dead { opacity:.3; }
+  .actions { display:flex; gap:8px; margin-top:12px; align-items:center; }
+  .go { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:10px 22px; font:inherit; font-weight:600; cursor:pointer; }
+  .ghost { background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 14px; font:inherit; cursor:pointer; }
+  .ghost:disabled, .go:disabled { opacity:.4; cursor:default; }
+  .msg { margin-top:8px; min-height:44px; font-size:14px; }
+  footer { margin-top:16px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <header><h1>前線輪替</h1><div class="stats" id="stats"></div></header>
+  <details open>
+    <summary>怎麼玩</summary>
+    <ul>
+      <li>敵人每回合往下一格。撐過 14 波並清光敵人就獲勝，漏掉 3 個就失敗。</li>
+      <li><b>每回合只做一件事，做完回合立刻結束</b>：派兵（點後方士兵，再點前線欄位；可直接換下原本的人）、撤下（連點前線士兵兩次），或按「待命」。</li>
+      <li>戰力不低於敵人就獲勝，但會累積疲勞。戰力較低則陣亡（永久），敵人會扣掉該士兵戰力的一半，停在原地下回合再打。</li>
+      <li><b class="shield">■ 盾兵</b>：打完只累積很少疲勞，適合久守。</li>
+      <li><b class="cav">▲ 騎兵</b>：每次剛派上前線的第一場交戰，戰力 +6。想再衝鋒要撤下重派。</li>
+      <li><b class="bow">● 弓兵</b>：近戰弱。在前線時每回合射擊同欄逼近中（最近兩格）的敵人，傷害為戰力一半，每箭疲勞 +1。</li>
+      <li>後方士兵每回合恢復 4 點疲勞；沒有疲勞時改為訓練，戰力 +1（最多 +3）。前線士兵不恢復。</li>
+    </ul>
+  </details>
+
+  <div class="label">下一回合出現</div>
+  <div class="board" id="next"></div>
+  <div class="label">敵軍（橘框：這回合結束就交戰）</div>
+  <div class="board" id="board"></div>
+  <div class="label">前線</div>
+  <div class="board" id="front"></div>
+  <div class="label">後方（點士兵，再點前線欄位）</div>
+  <div class="reserve" id="reserve"></div>
+
+  <div class="actions">
+    <button class="go" id="end">待命（跳過）</button>
+    <button class="ghost" id="restart">新的一局</button>
+  </div>
+  <div class="msg" id="msg" aria-live="polite"></div>
+  <footer>遊戲代號：FL-2（填問卷時請照抄）</footer>
+</main>
+<script src="engine.js"></script>
+<script>
+const E = Engine, $ = id => document.getElementById(id);
+const ICON = { shield:'■', cav:'▲', bow:'●' }, NAME = { shield:'盾', cav:'騎', bow:'弓' };
+let state, sel = null, armed = null, flashes = {}, busy = false, timer, audio;
+
+function beep(freq, dur, type = 'square', delay = 0) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + delay;
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(.05, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+
+function start() {
+  clearTimeout(timer);
+  state = E.newGame(Math.floor(Math.random() * 1e9));
+  sel = null; armed = null; flashes = {}; busy = false;
+  $('msg').textContent = '敵人正在接近。點一名士兵，看看派到各欄會發生什麼。';
+  render();
+}
+
+const unit = (type, n) => `<span class="u ${type}">${ICON[type]}${NAME[type]}${n}</span>`;
+const foe = (n, cls = 'u') => `<span class="${cls} foe">敵${n}</span>`;
+const detail = x => [x.train ? `訓+${x.train}` : '', x.fat ? `疲−${x.fat}` : ''].filter(Boolean).join(' ') || '精神飽滿';
+
+// 預測：假設之後不再下指令
+function predict(id, col) {
+  const events = E.forecast(state, id, col);
+  if (!events.length) return '<div class="pred sub">暫無接敵</div>';
+  return events.slice(0, 3).map(ev => {
+    const when = ev.turn === 1 ? '本回合' : `${ev.turn}回後`;
+    if (ev.k === 'shot') return `<div class="pred warn">${when}射−${ev.dmg}</div>`;
+    if (ev.k === 'kill') return `<div class="pred good">${when}勝<br>疲+${ev.fatigue}</div>`;
+    return `<div class="pred bad">${when}陣亡<br>敵剩${ev.left}</div>`;
+  }).join('');
+}
+
+function render() {
+  const p = state.p, last = p.rows - 1;
+  $('stats').textContent = `波次 ${Math.min(state.turn + 1, p.waves)}／${p.waves}　防線 ${'♥'.repeat(Math.max(0, state.lives))}${'♡'.repeat(p.lives - Math.max(0, state.lives))}`;
+  const wave = state.waves[state.turn + 1] || [];
+  $('next').innerHTML = [...Array(p.cols).keys()].map(c => {
+    const e = wave.find(x => x.col === c);
+    return `<div class="cell next">${e ? foe(e.str, 'sm') : ''}</div>`;
+  }).join('');
+
+  let html = '';
+  for (let r = 0; r < p.rows; r++) for (let c = 0; c < p.cols; c++) {
+    const e = state.enemies.find(x => x.row === r && x.col === c);
+    const queued = r === 0 ? state.enemies.filter(x => x.col === c && x.row < 0).length : 0;
+    html += `<div class="cell ${e && r === last ? 'danger' : ''}">${e ? foe(e.str) : ''}${queued ? `<span class="sub">後面還有 ${queued}</span>` : ''}</div>`;
+  }
+  $('board').innerHTML = html;
+
+  $('front').innerHTML = [...Array(p.cols).keys()].map(c => {
+    const x = E.frontAt(state, c), contact = state.enemies.some(e => e.col === c && e.row === last);
+    let body;
+    if (sel !== null) body = `<div class="sub">${x ? '換上' : '派到這'}</div>${predict(sel, c)}`;
+    else if (x) body = `${unit(x.type, E.power(x))}<div class="sub">${detail(x)}${x.type === 'cav' && x.fresh ? '<br>衝鋒待發' : ''}</div>${armed === c ? '<div class="pred warn">再點撤下</div>' : predict(x.id, c)}`;
+    else body = contact ? '<div class="pred warn">將漏敵</div>' : '<div class="sub">空</div>';
+    return `<button class="cell ${sel !== null ? 'target' : ''} ${armed === c ? 'armed' : ''} ${flashes[c] ? 'flash-' + flashes[c] : ''}" data-col="${c}" ${busy || state.over || (sel === null && !x) ? 'disabled' : ''}>${body}</button>`;
+  }).join('');
+
+  $('reserve').innerHTML = state.soldiers.map(x => {
+    if (x.dead) return `<button class="sol dead" disabled>${unit(x.type, '')}<div class="sub">陣亡</div></button>`;
+    if (x.col !== null) return `<button class="sol dead" disabled>${unit(x.type, E.power(x))}<div class="sub">前線 ${x.col + 1}</div></button>`;
+    const after = x.fat ? `休息：疲−${Math.max(0, x.fat - p.rest)}` : x.train < p.trainCap ? '訓練中 +1' : '訓練已滿';
+    return `<button class="sol ${sel === x.id ? 'sel' : ''}" data-id="${x.id}" ${busy || state.over ? 'disabled' : ''}>${unit(x.type, E.power(x))}<div class="sub">${detail(x)}<br>${after}</div></button>`;
+  }).join('');
+
+  $('front').querySelectorAll('button').forEach(b => b.onclick = () => clickFront(+b.dataset.col));
+  $('reserve').querySelectorAll('[data-id]').forEach(b => b.onclick = () => { sel = sel === +b.dataset.id ? null : +b.dataset.id; armed = null; render(); });
+  $('end').disabled = busy || !!state.over;
+}
+
+function clickFront(col) {
+  if (busy || state.over) return;
+  if (sel !== null) return endTurn({ k:'deploy', s:sel, col });
+  const x = E.frontAt(state, col);
+  if (!x) return;
+  if (armed === col) return endTurn({ k:'withdraw', s:x.id });
+  armed = col; beep(420, .06, 'triangle'); render();
+}
+
+// 執行指令並立刻結束回合
+function endTurn(order) {
+  if (busy || state.over) return;
+  if (order) E.applyOrder(state, order);
+  const events = E.endTurn(state);
+  sel = null; armed = null; flashes = {};
+  const lines = events.map((ev, i) => {
+    flashes[ev.col] = ev.k;
+    const at = `第 ${ev.col + 1} 欄`;
+    if (ev.k === 'kill') { beep(660, .12, 'square', i * .1); return `${at}擊退敵人`; }
+    if (ev.k === 'shot') { beep(990, .07, 'triangle', i * .1); return `${at}射擊 −${ev.dmg}${ev.left ? '' : '，敵人倒下'}`; }
+    if (ev.k === 'death') { beep(150, .3, 'sawtooth', i * .1); return `<span class="bad">${at}士兵陣亡（敵人 −${ev.dmg}）</span>`; }
+    beep(90, .4, 'sawtooth', i * .1); return `<span class="bad">${at}防線被突破！</span>`;
+  });
+  if (state.over) {
+    const alive = state.soldiers.filter(x => !x.dead).length;
+    lines.push(state.over === 'win' ? `<b class="good">守住了！存活士兵 ${alive}／${state.soldiers.length}</b>` : `<b class="bad">防線失守（撐到第 ${state.turn} 回合）</b>`);
+    if (state.over === 'win') [523, 659, 784].forEach((f, i) => beep(f, .25, 'triangle', .3 + i * .15));
+  }
+  $('msg').innerHTML = lines.join('；') || '敵人前進了一格。';
+  // 短暫鎖定，避免連點誤下指令
+  busy = true; render(); flashes = {};
+  timer = setTimeout(() => { busy = false; render(); }, 450);
+}
+
+$('end').onclick = () => endTurn();
+$('restart').onclick = start;
+start();
+</script>
+</body>
+</html>
