@@ -57,7 +57,7 @@
     <ul>
       <li>敵人每回合往下一格。撐過 14 波並清光敵人就獲勝，漏掉 3 個就失敗。</li>
       <li><b>每回合只能下 1 個指令</b>：派一名士兵上前線（可直接換下原本的人），或撤下一名。然後按「結束回合」。</li>
-      <li>戰力不低於敵人就獲勝，但會累積疲勞。戰力較低則陣亡（永久），敵人被削弱後留在原地。</li>
+      <li>戰力不低於敵人就獲勝，但會累積疲勞。戰力較低則陣亡（永久），但敵人會扣掉該士兵戰力的一半（不計剋制），並停在原地、下回合再打，可以用犧牲爭取時間或磨弱強敵。</li>
       <li>後方士兵每回合恢復 4 點疲勞；沒有疲勞時改為訓練，戰力 +1（最多 +3）。前線士兵不恢復。</li>
       <li>剋制時戰力 ×1.5：▲ 剋 ●，● 剋 ■，■ 剋 ▲。</li>
     </ul>
@@ -118,7 +118,7 @@ function predict(soldier, col) {
   const d = E.duel(view.p, soldier, e), wait = last - e.row;
   const when = wait <= 0 ? '本回合' : `${wait} 回合後`;
   const strength = `<div class="sub">${d.sp % 1 ? d.sp.toFixed(1) : d.sp} 對 ${d.ep % 1 ? d.ep.toFixed(1) : d.ep}</div>`;
-  return d.win ? `<div class="pred good">${when}勝<br>疲+${d.fatigue}</div>${strength}` : `<div class="pred bad">${when}陣亡</div>${strength}`;
+  return d.win ? `<div class="pred good">${when}勝<br>疲+${d.fatigue}</div>${strength}` : `<div class="pred bad">${when}陣亡<br>敵剩${E.weakened(soldier, e)}</div>${strength}`;
 }
 
 function render() {

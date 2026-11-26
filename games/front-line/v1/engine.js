@@ -4,7 +4,7 @@
     cols: 5, rows: 4, lives: 3, orders: 1,
     roster: ['atk', 'atk', 'atk', 'def', 'def', 'def', 'spd', 'spd'],
     base: 8, counter: 1.5, fatigueRate: 0.5, rest: 4, trainCap: 3,
-    waves: 14, countStart: 0.8, countEnd: 1.8, strStart: 4, strEnd: 11, strRand: 3,
+    sacrifice: true, waves: 14, countStart: 0.8, countEnd: 1.8, strStart: 4, strEnd: 11, strRand: 3,
   };
   const BEATS = { atk: 'spd', spd: 'def', def: 'atk' };
   const TYPES = ['atk', 'def', 'spd'];
@@ -61,6 +61,9 @@
   const power = x => Math.max(0, x.base + x.train - x.fat);
   const frontAt = (s, col) => s.soldiers.find(x => !x.dead && x.col === col);
 
+  // 士兵落敗時敵人剩下的戰力
+  const weakened = (soldier, enemy) => Math.max(1, enemy.str - Math.floor(power(soldier) / 2));
+
   // 單場交戰預測：不改變狀態
   function duel(p, soldier, enemy) {
     const sp = power(soldier) * (BEATS[soldier.type] === enemy.type ? p.counter : 1);
@@ -90,8 +93,9 @@
       const d = duel(p, x, e);
       if (d.win) { x.fat += d.fatigue; e.gone = true; s.kills++; events.push({ k: 'kill', col: e.col, s: x.id }); }
       else {
-        const dmg = Math.floor(power(x) / 2);
-        x.dead = true; x.col = null; e.str = Math.max(1, e.str - dmg);
+        const left = weakened(x, e), dmg = e.str - left;
+        x.dead = true; x.col = null; e.str = left;
+        if (p.sacrifice === false) { s.lives--; e.gone = true; }
         events.push({ k: 'death', col: e.col, s: x.id, dmg });
       }
     }
@@ -111,6 +115,6 @@
     return events;
   }
 
-  const api = { P, BEATS, newGame, clone, power, frontAt, duel, applyOrder, endTurn };
+  const api = { P, BEATS, newGame, clone, power, frontAt, weakened, duel, applyOrder, endTurn };
   if (typeof module !== 'undefined') module.exports = api; else root.Engine = api;
 })(this);
