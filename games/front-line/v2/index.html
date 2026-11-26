@@ -50,6 +50,9 @@
   .ghost { background:transparent; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:9px 14px; font:inherit; cursor:pointer; }
   .ghost:disabled, .go:disabled { opacity:.4; cursor:default; }
   .msg { margin-top:8px; min-height:44px; font-size:14px; }
+  .levels { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); }
+  .levels button { font:inherit; padding:4px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  .levels button.on { border-color:var(--accent); background:var(--accent); color:#fff; }
   footer { margin-top:16px; color:var(--muted); font-size:12px; }
 </style>
 </head>
@@ -59,7 +62,7 @@
   <details open>
     <summary>怎麼玩</summary>
     <ul>
-      <li>敵人每回合往下一格。撐過 14 波並清光敵人就獲勝，漏掉 3 個就失敗。</li>
+      <li>敵人每回合往下一格。撐過 14 波並清光敵人就獲勝，防線的 ♥ 扣光就失敗（漏一個敵人扣一顆）。</li>
       <li><b>每回合只做一件事，做完回合立刻結束</b>：派兵（點後方士兵，再點前線欄位；可直接換下原本的人）、撤下（連點前線士兵兩次），或按「待命」。</li>
       <li>戰力不低於敵人就獲勝，但會累積疲勞。戰力較低則陣亡（永久），敵人會扣掉該士兵戰力的一半，停在原地下回合再打。</li>
       <li><b class="shield">■ 盾兵</b>：打完只累積很少疲勞，適合久守。</li>
@@ -69,6 +72,7 @@
     </ul>
   </details>
 
+  <div class="levels" id="levels"></div>
   <div class="label">下一回合出現</div>
   <div class="board" id="next"></div>
   <div class="label">敵軍（橘框：這回合結束就交戰）</div>
@@ -83,7 +87,7 @@
     <button class="ghost" id="restart">新的一局</button>
   </div>
   <div class="msg" id="msg" aria-live="polite"></div>
-  <footer>遊戲代號：FL-2（填問卷時請照抄）</footer>
+  <footer id="code"></footer>
 </main>
 <script src="engine.js"></script>
 <script>
@@ -101,9 +105,24 @@ function beep(freq, dur, type = 'square', delay = 0) {
   } catch (e) {}
 }
 
+// 難度只改敵人與防線耐久
+const LEVELS = {
+  E: { name:'簡單', lives:4, countEnd:1.6, strEnd:10 },
+  N: { name:'普通', lives:4, countEnd:1.8, strEnd:11 },
+  H: { name:'困難', lives:3, countEnd:1.8, strEnd:12 },
+};
+let level = 'E';
+
+function renderLevels() {
+  $('levels').innerHTML = '難度' + Object.entries(LEVELS).map(([k, v]) => `<button class="${k === level ? 'on' : ''}" data-level="${k}">${v.name}</button>`).join('');
+  $('levels').querySelectorAll('button').forEach(b => b.onclick = () => { level = b.dataset.level; start(); });
+  $('code').textContent = `遊戲代號：FL-2${level}（填問卷時請照抄）`;
+}
+
 function start() {
   clearTimeout(timer);
-  state = E.newGame(Math.floor(Math.random() * 1e9));
+  state = E.newGame(Math.floor(Math.random() * 1e9), { ...E.P, ...LEVELS[level] });
+  renderLevels();
   sel = null; armed = null; flashes = {}; busy = false;
   $('msg').textContent = '敵人正在接近。點一名士兵，看看派到各欄會發生什麼。';
   render();
