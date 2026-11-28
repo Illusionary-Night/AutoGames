@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>魔法理論研究室</title>
+<style>
+  :root { --bg:#f7f6fb; --fg:#1d1b26; --muted:#6c6880; --card:#fff; --line:#d8d4e6; --accent:#6a45d9; --good:#218358; --bad:#d93d42;
+          --r0:#d9731a; --r1:#4a6fd8; --r2:#a23fb5; --r3:#6d7a50; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14121c; --fg:#ece9f6; --muted:#9c97b3; --card:#1e1b2a; --line:#37324a; --accent:#9a7bff; --good:#4cc38a; --bad:#ff6369;
+            --r0:#ffa24d; --r1:#82a2ff; --r2:#d98ae8; --r3:#aebd85; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  main { max-width:560px; margin:0 auto; padding:12px 16px 40px; }
+  h1 { font-size:21px; margin:0 0 6px; }
+  h2 { font-size:15px; margin:0 0 8px; display:flex; justify-content:space-between; gap:8px; }
+  h2 span { color:var(--muted); font-weight:400; font-size:13px; }
+  button, select { font:inherit; color:var(--fg); }
+  button { cursor:pointer; }
+  button:disabled { opacity:.4; cursor:default; }
+  .levels { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .levels button, .ghost { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:4px 12px; }
+  .levels button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  section, details { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-top:10px; }
+  summary { cursor:pointer; font-weight:600; }
+  details ul { margin:6px 0; padding-left:18px; }
+  .slots, .runes { display:flex; gap:8px; margin-bottom:8px; }
+  .slots button { flex:1; height:52px; border:2px dashed var(--line); border-radius:10px; background:transparent; font-size:22px; font-weight:700; }
+  .slots button.full { border-style:solid; }
+  .runes button { flex:1; height:42px; border:2px solid var(--line); border-radius:10px; background:var(--bg); font-size:19px; font-weight:700; }
+  .r0 { color:var(--r0) !important; } .r1 { color:var(--r1) !important; } .r2 { color:var(--r2) !important; } .r3 { color:var(--r3) !important; }
+  .go { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 20px; font-weight:600; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .pred { font-size:14px; color:var(--muted); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:center; padding:4px; border-bottom:1px solid var(--line); }
+  th { font-size:12px; color:var(--muted); font-weight:400; }
+  td b { font-size:18px; }
+  .good { color:var(--good); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .grid4 label { text-align:center; font-weight:700; font-size:18px; }
+  select { width:100%; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:5px 2px; }
+  .law { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .law select { width:auto; padding:5px 6px; }
+  .msg { min-height:24px; margin-top:8px; }
+  .new { animation:new .6s ease; }
+  @keyframes new { 0% { transform:scale(1.35); color:var(--accent); } }
+  footer { margin-top:16px; color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>魔法理論研究室</h1>
+  <div class="levels" id="levels"></div>
+  <details open>
+    <summary>研究須知</summary>
+    <ul id="rules"></ul>
+  </details>
+
+  <section>
+    <h2>實驗台<span id="budget"></span></h2>
+    <div class="slots" id="slots"></div>
+    <div class="runes" id="runes"></div>
+    <div class="row"><button class="go" id="test">施放實驗</button><span class="pred" id="pred"></span></div>
+    <div class="msg" id="msg" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2>實驗紀錄<span id="fit"></span></h2>
+    <div id="log"></div>
+  </section>
+
+  <section>
+    <h2>理論板<span>填入你的推測，紀錄會自動比對</span></h2>
+    <div class="grid4" id="values"></div>
+    <div class="law" id="posLaw"></div>
+    <div class="law" id="pairLaw"></div>
+    <div class="row" style="margin-top:12px"><button class="go" id="publish">發表論文</button><button class="ghost" id="restart">新的研究</button></div>
+    <div class="msg" id="result" aria-live="polite"></div>
+  </section>
+  <footer id="code"></footer>
+</main>
+<script src="engine.js"></script>
+<script>
+const E = Engine, $ = id => document.getElementById(id);
+let levelKey = 'E', level, law, R, spell, log, theory, finished, armed, audio;
+
+function beep(freq, dur = .12, delay = 0) {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + delay;
+    o.type = 'triangle'; o.frequency.value = freq; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g).connect(audio.destination); o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+
+const blank = () => ({ v: ['', '', '', ''], pos: '', kind: '', a: '', b: '', d: '' });
+const rune = i => `<span class="r${i}">${E.RUNES[i]}</span>`;
+const spellHtml = s => s.map(rune).join(' ');
+
+function start() {
+  level = E.LEVELS[levelKey];
+  R = E.rng(Math.floor(Math.random() * 1e9));
+  law = E.randomLaw(R, level);
+  spell = []; log = []; theory = blank(); finished = false; armed = false;
+  $('msg').textContent = ''; $('result').innerHTML = '';
+  render();
+}
+
+// 把理論板轉成可計算的法則；缺少數值或位置法則時回傳 null
+function draft() {
+  const t = theory;
+  if (t.pos === '' || !t.kind) return null;
+  const pair = t.a !== '' && t.b !== '' && t.d !== '' ? { a: +t.a, b: +t.b, d: +t.d } : null;
+  return { v: t.v.map(x => x === '' ? null : +x), pos: +t.pos, kind: t.kind, pair };
+}
+const predict = s => { const d = draft(); return d && s.every(i => d.v[i] !== null) ? E.evaluate(d, s) : null; };
+const complete = () => { const d = draft(); return !!d && d.v.every(x => x !== null) && (!level.pair || !!d.pair); };
+
+const options = (list, cur, empty = '？') => `<option value="">${empty}</option>` + list.map(([v, t]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${t}</option>`).join('');
+
+function render() {
+  const left = level.budget - log.length;
+  $('levels').innerHTML = Object.entries(E.LEVELS).map(([k, l]) => `<button class="${k === levelKey ? 'on' : ''}" data-l="${k}">${l.name}</button>`).join('');
+  $('rules').innerHTML = [
+    '本局有一套隨機產生、不公開的魔法法則。咒語由 3 個符文組成，施放後只看得到一個「魔力讀數」。',
+    `四個符文各有一個基礎數值，是 ${E.VALUES[0]}～${E.VALUES.at(-1)} 之中<b>互不相同</b>的數。讀數基本上是三個數值相加。`,
+    `<b>位置法則</b>：三個位置中有一個很特別，放在那裡的符文數值會「加倍」或「反轉成負數」。`,
+    level.pair ? `<b>相鄰法則</b>：某個符文<b>緊接在</b>某個符文後面這個順序出現時（可能是同一種符文連續兩次），讀數再 +${E.BONUS} 或 −${E.BONUS}。每出現一次算一次。` : '見習難度沒有相鄰法則。',
+    `實驗只有 <b>${level.budget} 次</b>。把推測填進理論板，確定後發表論文：會用 5 道你沒做過的咒語考驗理論，<b>全部預測正確</b>才算研究成功。`,
+  ].map(t => `<li>${t}</li>`).join('');
+  $('budget').textContent = `剩餘 ${left}／${level.budget} 次`;
+  $('slots').innerHTML = [0, 1, 2].map(i => `<button class="${spell[i] != null ? 'full r' + spell[i] : ''}" data-s="${i}" ${spell[i] == null ? 'disabled' : ''}>${spell[i] != null ? E.RUNES[spell[i]] : i + 1}</button>`).join('');
+  $('runes').innerHTML = E.RUNES.map((n, i) => `<button class="r${i}" data-r="${i}" ${spell.length >= E.LEN || finished ? 'disabled' : ''}>${n}</button>`).join('');
+  const full = spell.length === E.LEN, repeat = full && log.some(x => x.s.join() === spell.join());
+  $('test').disabled = !full || repeat || left <= 0 || finished;
+  const p = full ? predict(spell) : null;
+  $('pred').textContent = repeat ? '這道咒語做過了' : !full ? '' : p === null ? '理論板還無法預測這道咒語' : `你的理論預測：${p}${level.pair && !draft().pair ? '（未含相鄰法則）' : ''}`;
+
+  let ok = 0, checked = 0;
+  const rows = log.map((x, i) => {
+    const q = predict(x.s);
+    if (q !== null) { checked++; if (q === x.r) ok++; }
+    return `<tr><td class="muted">${i + 1}</td><td>${spellHtml(x.s)}</td><td><b class="${x.fresh ? 'new' : ''}">${x.r}</b></td><td class="${q === null ? 'muted' : q === x.r ? 'good' : 'bad'}">${q === null ? '—' : (q === x.r ? '✓ ' : '✗ ') + q}</td></tr>`;
+  });
+  log.forEach(x => x.fresh = false);
+  $('log').innerHTML = log.length ? `<table><tr><th>#</th><th>咒語</th><th>實際讀數</th><th>理論預測</th></tr>${rows.join('')}</table>` : '<div class="muted">還沒有實驗。</div>';
+  $('fit').textContent = checked ? `理論符合 ${ok}／${checked}` : '';
+
+  $('values').innerHTML = E.RUNES.map((n, i) => `<label class="r${i}">${n}<select data-v="${i}" ${finished ? 'disabled' : ''}>${options(E.VALUES.map(v => [v, v]), theory.v[i])}</select></label>`).join('');
+  const sel = (key, list) => `<select data-k="${key}" aria-label="${key}" ${finished ? 'disabled' : ''}>${options(list, theory[key])}</select>`;
+  $('posLaw').innerHTML = `位置法則：第 ${sel('pos', [[0, 1], [1, 2], [2, 3]])} 個位置的數值 ${sel('kind', Object.entries(E.POS_KINDS))}`;
+  const runeOpts = E.RUNES.map((n, i) => [i, n]);
+  $('pairLaw').innerHTML = level.pair ? `相鄰法則：${sel('a', runeOpts)} 後面緊接 ${sel('b', runeOpts)} 時 ${sel('d', [[E.BONUS, '+' + E.BONUS], [-E.BONUS, '−' + E.BONUS]])}` : '';
+  $('publish').disabled = finished || !complete();
+  $('publish').textContent = armed ? '確定發表？再按一次' : '發表論文';
+  $('code').textContent = `遊戲代號：TL-1${levelKey}（填問卷時請照抄）`;
+
+  $('levels').querySelectorAll('button').forEach(b => b.onclick = () => { levelKey = b.dataset.l; start(); });
+  $('slots').querySelectorAll('button').forEach(b => b.onclick = () => { spell.splice(+b.dataset.s, 1); render(); });
+  $('runes').querySelectorAll('button').forEach(b => b.onclick = () => { if (spell.length < E.LEN) { spell.push(+b.dataset.r); beep(330 + +b.dataset.r * 90, .08); render(); } });
+  $('values').querySelectorAll('select').forEach(s => s.onchange = () => { theory.v[+s.dataset.v] = s.value; armed = false; render(); });
+  document.querySelectorAll('select[data-k]').forEach(s => s.onchange = () => { theory[s.dataset.k] = s.value; armed = false; render(); });
+}
+
+$('test').onclick = () => {
+  if (finished || spell.length !== E.LEN || log.length >= level.budget || log.some(x => x.s.join() === spell.join())) return;
+  const p = predict(spell), r = E.evaluate(law, spell);
+  log.push({ s: spell.slice(), r, fresh: true });
+  beep(300 + r * 30, .25);
+  $('msg').innerHTML = `${spellHtml(spell)} 的讀數是 <b>${r}</b>${p === null ? '' : p === r ? '<span class="good">，和理論預測一致。</span>' : '<span class="bad">，和理論預測不同。</span>'}`
+    + (log.length >= level.budget ? '<br>實驗額度用完了。整理理論，然後發表。' : '');
+  spell = []; armed = false; render();
+};
+
+$('publish').onclick = () => {
+  if (finished || !complete()) return;
+  if (!armed) { armed = true; render(); return; }
+  finished = true; armed = false; spell = [];
+  const mine = draft(), qs = E.exam(law, log.map(x => x.s), R);
+  let ok = 0;
+  const rows = qs.map(q => { const a = E.evaluate(law, q), b = E.evaluate(mine, q); if (a === b) ok++; return `<tr><td>${spellHtml(q)}</td><td>${b}</td><td><b>${a}</b></td><td class="${a === b ? 'good' : 'bad'}">${a === b ? '✓' : '✗'}</td></tr>`; });
+  const pass = ok === qs.length;
+  const truth = [E.RUNES.map((n, i) => `${rune(i)}=${law.v[i]}`).join('　'), `第 ${law.pos + 1} 個位置${E.POS_KINDS[law.kind]}`,
+    law.pair ? `${rune(law.pair.a)} 後面緊接 ${rune(law.pair.b)} 時 ${law.pair.d > 0 ? '+' : '−'}${E.BONUS}` : ''].filter(Boolean).join('<br>');
+  $('result').innerHTML = `<p class="${pass ? 'good' : 'bad'}"><b>${pass ? `研究成功！用了 ${log.length} 次實驗。` : `論文被推翻：5 道中只預測對 ${ok} 道。`}</b></p>
+    <table><tr><th>考題</th><th>你的預測</th><th>實際</th><th></th></tr>${rows.join('')}</table>
+    <p><b>本局真正的法則</b><br>${truth}</p>`;
+  (pass ? [523, 659, 784] : [300, 220]).forEach((f, i) => beep(f, .25, i * .14));
+  render();
+};
+$('restart').onclick = start;
+start();
+</script>
+</body>
+</html>
